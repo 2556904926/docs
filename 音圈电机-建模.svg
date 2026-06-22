@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="780" height="320" viewBox="0 0 780 320">
+  <style>
+    .box { fill: #f4f4f4; stroke: #444; stroke-width: 2; }
+    .label { font-family: Arial, sans-serif; font-size: 14px; fill: #222; }
+    .arrow { stroke: #222; stroke-width: 2; fill: none; marker-end: url(#arrowhead); }
+    .note { font-family: Arial, sans-serif; font-size: 12px; fill: #333; }
+  </style>
+  <defs>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#222" />
+    </marker>
+  </defs>
+  <rect x="20" y="110" width="140" height="80" rx="12" ry="12" class="box" />
+  <text x="90" y="140" text-anchor="middle" class="label">输入电压</text>
+  <text x="90" y="160" text-anchor="middle" class="label">u(t)</text>
+  <rect x="200" y="80" width="180" height="140" rx="12" ry="12" class="box" />
+  <text x="290" y="110" text-anchor="middle" class="label">电学回路</text>
+  <text x="290" y="130" text-anchor="middle" class="label">R, L, Ke ẋ</text>
+  <rect x="420" y="80" width="180" height="140" rx="12" ry="12" class="box" />
+  <text x="510" y="110" text-anchor="middle" class="label">力学部分</text>
+  <text x="510" y="130" text-anchor="middle" class="label">m, b, k</text>
+  <rect x="640" y="110" width="120" height="80" rx="12" ry="12" class="box" />
+  <text x="700" y="140" text-anchor="middle" class="label">输出</text>
+  <text x="700" y="160" text-anchor="middle" class="label">x(t)</text>
+  <path d="M160 150 L200 150" class="arrow" />
+  <path d="M380 150 L420 150" class="arrow" />
+  <path d="M600 150 L640 150" class="arrow" />
+  <path d="M500 235 L500 185" class="arrow" />
+  <path d="M500 185 L300 185" class="arrow" />
+  <text x="470" y="220" text-anchor="middle" class="note">K i</text>
+  <path d="M420 150 L300 150" class="arrow" />
+  <text x="360" y="140" text-anchor="middle" class="note">Ke ẋ</text>
+</svg>
