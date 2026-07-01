@@ -39,7 +39,7 @@ $$t_r \approx 2.2 \times 0.5 = 1.1\ \text{s}$$
 ### 二阶系统
 
 对标准二阶系统输入单位阶跃信号，其时域输出响应因阻尼比 $\zeta$ 的不同而呈现不同形式。以典型欠阻尼系统为例，其输出响应为：
-$$ y(t) = 1 - \frac{e^{-\zeta \omega_n t}}{\sqrt{1-\zeta^2}} \sin\left(\omega_d t + \arctan\frac{\sqrt{1-\zeta^2}}{\zeta}\right) $$
+$$y(t) = 1 - \frac{e^{-\zeta \omega_n t}}{\sqrt{1-\zeta^2}} \sin\left(\omega_d t + \arctan\frac{\sqrt{1-\zeta^2}}{\zeta}\right)$$
 
 其中，$\omega_d = \omega_n \sqrt{1-\zeta^2}$ 为阻尼振荡频率。
 
@@ -218,4 +218,3 @@ $$G(s) \approx \frac{10}{s^2 + 2s + 2}$$
 | 高阶系统 | 主导极点位置 | 由主导极点近似决定 | 简化为主导二阶系统进行分析 |
 
 **核心思想**：任何高阶系统，都可以通过**主导极点**的概念，近似为低阶（一阶或二阶）系统进行分析和设计。这是经典控制理论中最实用的工程方法之一。
-
