@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>一阶系统 + PI 控制器 · 零极点对消设计</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: 'Segoe UI', 'PingFang SC', Roboto, sans-serif;
+            background: #f0f4f8;
+            display: flex;
+            justify-content: center;
+            padding: 20px;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1100px;
+            width: 100%;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.12);
+            padding: 24px 28px 32px;
+            align-self: flex-start;
+        }
+        h1 {
+            font-weight: 600;
+            font-size: 24px;
+            color: #0b1a33;
+            margin-bottom: 4px;
+        }
+        .subtitle {
+            color: #4a5b6e;
+            font-size: 14px;
+            border-left: 4px solid #3b82f6;
+            padding-left: 14px;
+            margin-bottom: 22px;
+            background: #f8faff;
+            border-radius: 0 8px 8px 0;
+            line-height: 1.7;
+        }
+        .subtitle code {
+            background: #e6edf6;
+            padding: 2px 10px;
+            border-radius: 6px;
+            font-size: 13px;
+            color: #1e3a6b;
+        }
+        .control-panel {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px 32px;
+            background: #f9fcff;
+            padding: 18px 22px 20px;
+            border-radius: 14px;
+            border: 1px solid #e9eef4;
+            margin-bottom: 24px;
+        }
+        .slider-group {
+            flex: 1 1 160px;
+            min-width: 140px;
+        }
+        .slider-group label {
+            display: flex;
+            justify-content: space-between;
+            font-weight: 500;
+            font-size: 14px;
+            color: #1a2b3e;
+        }
+        .slider-group label span:last-child {
+            color: #2563eb;
+            background: #e0ebff;
+            padding: 0 12px;
+            border-radius: 30px;
+            font-size: 13px;
+        }
+        input[type="range"] {
+            width: 100%;
+            margin: 6px 0 2px;
+            accent-color: #2563eb;
+            height: 5px;
+            background: #d0dcec;
+            border-radius: 10px;
+            cursor: pointer;
+        }
+        .param-value {
+            font-size: 13px;
+            color: #2c3e50;
+            margin-top: 1px;
+        }
+        .param-value code {
+            background: #eef3f9;
+            padding: 1px 8px;
+            border-radius: 5px;
+            font-size: 12px;
+        }
+        .design-result {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 10px 20px;
+            background: #eaf2fd;
+            padding: 8px 18px;
+            border-radius: 30px;
+            font-size: 14px;
+            color: #0b2b4a;
+            margin-top: 4px;
+        }
+        .design-result strong {
+            font-weight: 600;
+            color: #0047ab;
+        }
+        .charts-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-top: 4px;
+        }
+        .chart-card {
+            background: #ffffff;
+            border-radius: 14px;
+            border: 1px solid #e5edf6;
+            padding: 6px 6px 2px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.02);
+        }
+        .chart-card h3 {
+            font-size: 14px;
+            font-weight: 500;
+            color: #2c3e50;
+            padding: 4px 8px 2px;
+        }
+        .chart-wrapper {
+            position: relative;
+            width: 100%;
+            height: 220px;
+        }
+        .chart-wrapper canvas {
+            width: 100% !important;
+            height: 100% !important;
+            display: block;
+            border-radius: 8px;
+            background: #fafdff;
+        }
+        .footer-note {
+            margin-top: 20px;
+            font-size: 13px;
+            color: #4a607a;
+            background: #f5f9ff;
+            padding: 10px 16px;
+            border-radius: 12px;
+            border-left: 4px solid #3b82f6;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px 16px;
+        }
+        .footer-note span {
+            background: #e7eef9;
+            padding: 0 12px;
+            border-radius: 30px;
+            font-size: 12px;
+        }
+        @media (max-width: 700px) {
+            .charts-grid { grid-template-columns: 1fr; }
+            .container { padding: 14px; }
+            .design-result { flex-direction: column; align-items: flex-start; border-radius: 14px; }
+            .chart-wrapper { height: 180px; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>⚙️ 一阶系统 + PI · 零极点对消</h1>
+    <div class="subtitle">
+        <code>G(s) = 1/(T·s+1)</code> &nbsp; + &nbsp;
+        <code>G_PI(s) = Kp + Ki/s</code> &nbsp; → &nbsp;
+        令 <code>Ki/Kp = 1/T</code> &nbsp; 得 <code>Kp = Ki·T</code> ，闭环带宽 <code>ω_b = Ki</code>
+    </div>
+
+    <div class="control-panel">
+        <div class="slider-group">
+            <label>
+                <span>⏱ 时间常数 T</span>
+                <span id="T_display">0.50</span>
+            </label>
+            <input type="range" id="T_slider" min="0.1" max="2.0" step="0.01" value="0.5">
+            <div class="param-value">极点 <code>s = -1/T</code></div>
+        </div>
+        <div class="slider-group">
+            <label>
+                <span>📶 带宽 ω<sub>b</sub></span>
+                <span id="wb_display">10.0</span>
+            </label>
+            <input type="range" id="wb_slider" min="1" max="30" step="0.5" value="10">
+            <div class="param-value">闭环极点 <code>s = -ω<sub>b</sub></code></div>
+        </div>
+        <div class="design-result">
+            <span><strong>K<sub>p</sub></strong> = <span id="kp_val">5.00</span></span>
+            <span><strong>K<sub>i</sub></strong> = <span id="ki_val">10.00</span></span>
+            <span>⚡ 实际带宽 <span id="bw_actual">—</span> rad/s</span>
+        </div>
+    </div>
+
+    <div class="charts-grid">
+        <div class="chart-card">
+            <h3>📈 单位阶跃响应</h3>
+            <div class="chart-wrapper">
+                <canvas id="stepChart"></canvas>
+            </div>
+        </div>
+        <div class="chart-card">
+            <h3>📊 闭环 Bode · 带宽</h3>
+            <div class="chart-wrapper">
+                <canvas id="bodeChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div class="footer-note">
+        <span>✅ 零极点对消</span>
+        <span>🎯 实际带宽 ≈ 设定 ω<sub>b</sub></span>
+        <span>📌 拖动滑块实时更新</span>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script>
+(function() {
+    // DOM 引用
+    const T_slider = document.getElementById('T_slider');
+    const wb_slider = document.getElementById('wb_slider');
+    const T_display = document.getElementById('T_display');
+    const wb_display = document.getElementById('wb_display');
+    const kp_val = document.getElementById('kp_val');
+    const ki_val = document.getElementById('ki_val');
+    const bw_actual = document.getElementById('bw_actual');
+
+    const stepCanvas = document.getElementById('stepChart');
+    const bodeCanvas = document.getElementById('bodeChart');
+
+    let stepChart = null;
+    let bodeChart = null;
+
+    // 计算系统响应
+    function computeSystem(T, wb) {
+        const Ki = wb;
+        const Kp = Ki * T;
+
+        // 阶跃响应
+        const tStep = [];
+        const yActual = [];
+        const yIdeal = [];
+        const dt = 0.008;
+        const tEnd = Math.max(0.8, 4 / wb) * 2.4 + 0.3;
+        const n = Math.ceil(tEnd / dt);
+        for (let i = 0; i <= n; i++) {
+            const t = i * dt;
+            tStep.push(t);
+            const val = 1 - Math.exp(-Ki * t);
+            yActual.push(val);
+            yIdeal.push(val);
+        }
+
+        // Bode 数据
+        const freq = [];
+        const magDb = [];
+        const freqPoints = 100;
+        const fMin = 0.08, fMax = 300;
+        for (let i = 0; i <= freqPoints; i++) {
+            const f = fMin * Math.pow(fMax / fMin, i / freqPoints);
+            freq.push(f);
+            const mag = Ki / Math.sqrt(f * f + Ki * Ki);
+            magDb.push(20 * Math.log10(mag));
+        }
+
+        // 找 -3dB 带宽
+        let bw = wb;
+        for (let i = 0; i < magDb.length - 1; i++) {
+            if ((magDb[i] >= -3 && magDb[i+1] < -3) || (magDb[i] <= -3 && magDb[i+1] > -3)) {
+                const f1 = freq[i], f2 = freq[i+1];
+                const m1 = magDb[i], m2 = magDb[i+1];
+                bw = f1 + (f2 - f1) * (-3 - m1) / (m2 - m1);
+                break;
+            }
+        }
+        if (magDb[magDb.length-1] > -3) bw = freq[freq.length-1];
+
+        return { Kp, Ki, tStep, yActual, yIdeal, freq, magDb, bw };
+    }
+
+    // 更新图表
+    function updateAll() {
+        const T = parseFloat(T_slider.value);
+        const wb = parseFloat(wb_slider.value);
+        T_display.textContent = T.toFixed(2);
+        wb_display.textContent = wb.toFixed(1);
+
+        const data = computeSystem(T, wb);
+        kp_val.textContent = data.Kp.toFixed(3);
+        ki_val.textContent = data.Ki.toFixed(3);
+        bw_actual.textContent = data.bw.toFixed(2);
+
+        // 更新阶跃图
+        if (stepChart) {
+            stepChart.data.labels = data.tStep;
+            stepChart.data.datasets[0].data = data.yActual;
+            stepChart.data.datasets[1].data = data.yIdeal;
+            stepChart.update('none');
+        }
+
+        // 更新Bode图
+        if (bodeChart) {
+            bodeChart.data.labels = data.freq;
+            bodeChart.data.datasets[0].data = data.magDb;
+            bodeChart.data.datasets[1].data = new Array(data.freq.length).fill(-3);
+            bodeChart.update('none');
+        }
+    }
+
+    // 初始化图表
+    function initCharts() {
+        // 初始数据
+        const initData = computeSystem(0.5, 10);
+
+        // 阶跃响应图
+        stepChart = new Chart(stepCanvas, {
+            type: 'line',
+            data: {
+                labels: initData.tStep,
+                datasets: [
+                    { label: '实际闭环', data: initData.yActual, borderColor: '#2563eb', borderWidth: 2.5, pointRadius: 0, tension: 0.2 },
+                    { label: '理想闭环', data: initData.yIdeal, borderColor: '#dc2626', borderDash: [6, 4], borderWidth: 2, pointRadius: 0, tension: 0.2 }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { labels: { boxWidth: 14, padding: 8, font: { size: 11 } } } },
+                scales: {
+                    x: { title: { display: true, text: '时间 (s)', font: { size: 11 } }, grid: { color: '#e8eef4' } },
+                    y: { title: { display: true, text: 'y(t)', font: { size: 11 } }, min: 0, max: 1.35, grid: { color: '#e8eef4' } }
+                },
+                animation: false
+            }
+        });
+
+        // Bode 图
+        bodeChart = new Chart(bodeCanvas, {
+            type: 'line',
+            data: {
+                labels: initData.freq,
+                datasets: [
+                    { label: '闭环幅频', data: initData.magDb, borderColor: '#7c3aed', borderWidth: 2.5, pointRadius: 0, tension: 0.2 },
+                    { label: '-3 dB', data: new Array(initData.freq.length).fill(-3), borderColor: '#e11d48', borderDash: [4, 5], borderWidth: 1.5, pointRadius: 0, tension: 0 }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { labels: { boxWidth: 14, padding: 8, font: { size: 11 } } } },
+                scales: {
+                    x: { 
+                        title: { display: true, text: '频率 (rad/s)', font: { size: 11 } }, 
+                        type: 'logarithmic', 
+                        grid: { color: '#e8eef4' } 
+                    },
+                    y: { 
+                        title: { display: true, text: '幅值 (dB)', font: { size: 11 } }, 
+                        min: -40, max: 5, 
+                        grid: { color: '#e8eef4' } 
+                    }
+                },
+                animation: false
+            }
+        });
+
+        // 绑定滑块事件
+        T_slider.addEventListener('input', updateAll);
+        wb_slider.addEventListener('input', updateAll);
+
+        // 窗口变化时重绘
+        let resizeTimer;
+        window.addEventListener('resize', function() {
+            clearTimeout(resizeTimer);
+            resizeTimer = setTimeout(() => {
+                if (stepChart) stepChart.resize();
+                if (bodeChart) bodeChart.resize();
+            }, 150);
+        });
+    }
+
+    // 等待 DOM 完全加载
+    if (document.readyState === 'complete') {
+        initCharts();
+    } else {
+        window.addEventListener('load', initCharts);
+    }
+
+})();
+</script>
+</body>
+</html>
