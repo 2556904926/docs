@@ -1,0 +1,902 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZN整定法 · 手动调Kp到临界振荡</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js">
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js">
+    </script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', 'PingFang SC', sans-serif;
+            background: #0d1117;
+            color: #e6edf3;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+        }
+        .container {
+            max-width: 1000px;
+            width: 100%;
+        }
+
+        .header {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            padding: 14px 24px;
+            margin-bottom: 16px;
+            text-align: center;
+        }
+        .header h1 {
+            font-size: 22px;
+        }
+        .header h1 .gold {
+            color: #d69e2e;
+        }
+        .header .sub {
+            color: #8b949e;
+            font-size: 13px;
+            margin-top: 2px;
+        }
+        .header .sub .formula {
+            color: #d69e2e;
+            font-weight: 600;
+        }
+
+        .param-bar {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 10px;
+            padding: 10px 16px;
+            margin-bottom: 16px;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: center;
+            gap: 8px 16px;
+        }
+        .param-bar .item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+        }
+        .param-bar .item label {
+            color: #8b949e;
+            font-weight: 500;
+        }
+        .param-bar .item input[type="range"] {
+            width: 100px;
+            accent-color: #d69e2e;
+            background: #0d1117;
+            height: 4px;
+            cursor: pointer;
+        }
+        .param-bar .item input[type="range"].kp-slider {
+            accent-color: #7c3aed;
+            width: 130px;
+        }
+        .param-bar .item .val {
+            color: #d69e2e;
+            font-weight: 700;
+            font-family: 'Courier New', monospace;
+            min-width: 40px;
+            text-align: right;
+            font-size: 13px;
+        }
+        .param-bar .item .val.kp-val {
+            color: #7c3aed;
+        }
+        .param-bar .btn {
+            padding: 5px 16px;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 12px;
+            cursor: pointer;
+            background: #d69e2e;
+            color: #0d1117;
+            transition: 0.2s;
+        }
+        .param-bar .btn:hover {
+            background: #f6e05e;
+        }
+        .param-bar .btn-purple {
+            background: #7c3aed;
+            color: #fff;
+        }
+        .param-bar .btn-purple:hover {
+            background: #6d28d9;
+        }
+        .param-bar .btn-outline {
+            background: transparent;
+            border: 1px solid #30363d;
+            color: #8b949e;
+        }
+        .param-bar .btn-outline:hover {
+            border-color: #d69e2e;
+            color: #d69e2e;
+        }
+
+        .card {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            padding: 14px 18px 16px 18px;
+            margin-bottom: 16px;
+        }
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin-bottom: 8px;
+        }
+        .card-header .title {
+            font-size: 15px;
+            font-weight: 600;
+        }
+        .card-header .badge {
+            font-size: 11px;
+            color: #8b949e;
+            background: #0d1117;
+            padding: 2px 10px;
+            border-radius: 10px;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 200px;
+        }
+        .chart-container.tall {
+            height: 180px;
+        }
+
+        .legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px 20px;
+            margin-top: 4px;
+            font-size: 12px;
+            color: #8b949e;
+            justify-content: center;
+        }
+        .legend span {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .dot {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border-radius: 3px;
+        }
+        .dot.p {
+            background: #3b82f6;
+        }
+        .dot.zn {
+            background: #d69e2e;
+        }
+        .dot.ref {
+            background: #e53e3e;
+        }
+
+        .status-box {
+            text-align: center;
+            padding: 6px 14px;
+            border-radius: 6px;
+            margin-top: 6px;
+            font-size: 13px;
+            font-weight: 600;
+        }
+        .status-box.idle {
+            background: #1c2333;
+            color: #8b949e;
+        }
+        .status-box.oscillating {
+            background: #2d1b3d;
+            color: #7c3aed;
+        }
+        .status-box.ready {
+            background: #1d2d1d;
+            color: #48bb78;
+        }
+
+        /* 三组参数表 */
+        .table-wrap {
+            overflow-x: auto;
+            margin: 8px 0 4px 0;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        table th {
+            background: #0d1117;
+            font-weight: 600;
+            padding: 6px 10px;
+            text-align: center;
+            border: 1px solid #21262d;
+            color: #8b949e;
+        }
+        table td {
+            padding: 6px 10px;
+            text-align: center;
+            border: 1px solid #21262d;
+            font-family: 'Courier New', monospace;
+            font-weight: 600;
+        }
+        table tr.highlight {
+            background: #1c2333;
+        }
+        table tr.highlight td {
+            border-color: #d69e2e;
+            color: #d69e2e;
+        }
+        table td .num {
+            color: #d69e2e;
+        }
+        table td .num.blue {
+            color: #58a6ff;
+        }
+        table td .num.green {
+            color: #48bb78;
+        }
+        table td .num.purple {
+            color: #7c3aed;
+        }
+
+        .metrics {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 6px 20px;
+            background: #0d1117;
+            border-radius: 6px;
+            padding: 6px 14px;
+            margin-top: 6px;
+            border: 1px solid #21262d;
+            font-size: 12px;
+        }
+        .metrics span {
+            color: #8b949e;
+        }
+        .metrics span strong {
+            color: #d69e2e;
+        }
+
+        .note {
+            font-size: 12px;
+            color: #8b949e;
+            text-align: center;
+            padding-top: 8px;
+            margin-top: 8px;
+            border-top: 1px solid #21262d;
+            line-height: 1.6;
+        }
+        .note .gold {
+            color: #d69e2e;
+        }
+        .note .purple {
+            color: #7c3aed;
+        }
+
+        .row-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        @media (max-width: 750px) {
+            .row-2 {
+                grid-template-columns: 1fr;
+            }
+        }
+        @media (max-width: 600px) {
+            .param-bar {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .param-bar .item {
+                justify-content: space-between;
+            }
+            .param-bar .item input[type="range"] {
+                flex: 1;
+            }
+            .chart-container {
+                height: 170px;
+            }
+            table {
+                font-size: 12px;
+            }
+            table td,
+            table th {
+                padding: 4px 6px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+
+        <!-- ===== 头部 ===== -->
+        <div class="header">
+            <h1>⚡ Ziegler-Nichols <span class="gold">临界振荡法</span></h1>
+            <div class="sub">
+                <span class="formula">\(G(s)=\dfrac{K e^{-\tau s}}{Ts+1}\)</span>
+                &nbsp;·&nbsp; 手动调 \(K_p\) → 等幅振荡 → 读 \(K_u, T_u\) → 算 P / PI / PID
+            </div>
+        </div>
+
+        <!-- ===== 参数栏 ===== -->
+        <div class="param-bar">
+            <div class="item">
+                <label>K</label>
+                <input type="range" id="sliderK" min="0.3" max="3.0" step="0.05" value="1.0">
+                <span class="val" id="valK">1.00</span>
+            </div>
+            <div class="item">
+                <label>T</label>
+                <input type="range" id="sliderT" min="0.3" max="4.0" step="0.05" value="1.0">
+                <span class="val" id="valT">1.00</span>
+            </div>
+            <div class="item">
+                <label>τ</label>
+                <input type="range" id="sliderTau" min="0.05" max="1.5" step="0.02" value="0.50">
+                <span class="val" id="valTau">0.50</span>
+            </div>
+            <div style="border-left:2px solid #30363d;height:26px;"></div>
+            <div class="item" style="background:#1c2333;padding:2px 12px 2px 8px;border-radius:6px;border:1px solid #7c3aed;">
+                <label style="color:#7c3aed;font-weight:700;">\(K_p\)</label>
+                <input type="range" class="kp-slider" id="sliderKp" min="0" max="15" step="0.05" value="2.0">
+                <span class="val kp-val" id="valKp">2.00</span>
+            </div>
+            <button class="btn btn-purple" id="btnRecord">📌 记录临界</button>
+            <button class="btn btn-outline" id="btnReset">↺ 重置</button>
+        </div>
+
+        <!-- ===== 两列：纯P响应 + PID响应 ===== -->
+        <div class="row-2">
+
+            <!-- 图1：纯P -->
+            <div class="card">
+                <div class="card-header">
+                    <span class="title">📈 纯P 控制 · 调 \(K_p\)</span>
+                    <span class="badge" id="statusBadge" style="background:#1c2333;color:#8b949e;">调至等幅振荡</span>
+                </div>
+                <div class="chart-container">
+                    <canvas id="chartP"></canvas>
+                </div>
+                <div class="legend">
+                    <span><span class="dot p"></span> 闭环（Kp = <span id="legendKp">2.00</span>）</span>
+                    <span><span class="dot ref"></span> 目标值</span>
+                </div>
+                <div class="status-box idle" id="statusBox">
+                    ⬆ 增大 Kp 直到等幅振荡 → 点「记录临界」
+                </div>
+            </div>
+
+            <!-- 图2：PID -->
+            <div class="card">
+                <div class="card-header">
+                    <span class="title">📈 ZN-PID 整定后响应</span>
+                    <span class="badge" id="pidBadge">超调: --</span>
+                </div>
+                <div class="chart-container">
+                    <canvas id="chartPID"></canvas>
+                </div>
+                <div class="legend">
+                    <span><span class="dot zn"></span> ZN-PID 闭环</span>
+                    <span><span class="dot ref"></span> 目标值</span>
+                </div>
+                <div class="metrics">
+                    <span>超调 <strong id="mOver">--</strong></span>
+                    <span>调节时间 <strong id="mSettle" style="color:#58a6ff;">--</strong></span>
+                    <span>稳态误差 <strong id="mErr" style="color:#48bb78;">--</strong></span>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- ===== 三组参数表 ===== -->
+        <div class="card">
+            <div class="card-header">
+                <span class="title">📐 ZN 整定参数（P / PI / PID）</span>
+                <span class="badge" id="resultBadge" style="color:#8b949e;">⏳ 等待记录临界值...</span>
+            </div>
+
+            <div style="display:flex;flex-wrap:wrap;gap:6px 20px;background:#0d1117;border-radius:6px;padding:6px 14px;margin-bottom:8px;border:1px solid #21262d;font-size:13px;">
+                <span style="color:#8b949e;">\(K_u =\) <strong style="color:#d69e2e;" id="rKu">--</strong></span>
+                <span style="color:#8b949e;">\(T_u =\) <strong style="color:#7c3aed;" id="rTu">--</strong></span>
+            </div>
+
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>控制器</th>
+                            <th>\(K_p\)</th>
+                            <th>\(K_i\)</th>
+                            <th>\(K_d\)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>P</strong></td>
+                            <td><span class="num blue" id="tKpP">--</span></td>
+                            <td>—</td>
+                            <td>—</td>
+                        </tr>
+                        <tr>
+                            <td><strong>PI</strong></td>
+                            <td><span class="num blue" id="tKpPI">--</span></td>
+                            <td><span class="num green" id="tKiPI">--</span></td>
+                            <td>—</td>
+                        </tr>
+                        <tr class="highlight">
+                            <td><strong>PID</strong> ← 推荐</td>
+                            <td><span class="num blue" id="tKpPID">--</span></td>
+                            <td><span class="num green" id="tKiPID">--</span></td>
+                            <td><span class="num purple" id="tKdPID">--</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:6px 20px;background:#0d1117;border-radius:6px;padding:6px 14px;margin-top:6px;border:1px solid #21262d;font-size:12px;color:#8b949e;">
+                <span>P：\(K_p = 0.5K_u\)</span>
+                <span>PI：\(K_p = 0.45K_u\)，\(K_i = 0.54K_u/T_u\)</span>
+                <span style="color:#d69e2e;">PID：\(K_p = 0.6K_u\)，\(K_i = 1.2K_u/T_u\)，\(K_d = 0.075K_uT_u\)</span>
+            </div>
+
+            <div class="note">
+                <span class="gold">✅ 操作：</span>
+                ① 调 <span class="purple">\(K_p\)</span> 到 <span class="gold">等幅振荡</span> &nbsp;→&nbsp;
+                ② 点 <span class="purple">「记录临界」</span> &nbsp;→&nbsp;
+                ③ 三组参数自动算出，推荐用 <span class="gold">PID</span>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // ================================================================
+        //  1. 被控对象
+        // ================================================================
+        let obj = { K: 1.0, T: 1.0, tau: 0.50 };
+
+        let recorded = { Ku: null, Tu: null };
+
+        // ================================================================
+        //  2. 仿真（缩短到15秒）
+        // ================================================================
+        function simulate(Kp, Ki, Kd, obj, t) {
+            const dt = t[1] - t[0];
+            const n = t.length;
+            const K = obj.K,
+                T = obj.T,
+                tau = obj.tau;
+
+            if (tau < 0.001) {
+                let y = 0,
+                    integral = 0,
+                    prevError = 0,
+                    prevY = 0;
+                const yArr = new Float64Array(n);
+                const target = 1.0;
+                for (let i = 0; i < n; i++) {
+                    const error = target - prevY;
+                    const P = Kp * error;
+                    integral += Ki * error * dt;
+                    const D = Kd * (error - prevError) / dt;
+                    let u = P + integral + D;
+                    if (u > 50) u = 50;
+                    if (u < -50) u = -50;
+                    const dy = (K * u - y) / T;
+                    y += dy * dt;
+                    yArr[i] = y;
+                    prevError = error;
+                    prevY = y;
+                }
+                return yArr;
+            }
+
+            const tau2 = tau / 2;
+            let x1 = 0,
+                x2 = 0;
+            let integral = 0,
+                prevError = 0,
+                prevY = 0;
+            const yArr = new Float64Array(n);
+            const target = 1.0;
+
+            for (let i = 0; i < n; i++) {
+                const error = target - prevY;
+                const P = Kp * error;
+                integral += Ki * error * dt;
+                const D = Kd * (error - prevError) / dt;
+                let u = P + integral + D;
+                if (u > 50) u = 50;
+                if (u < -50) u = -50;
+
+                const dx1 = (u - x1) / tau2;
+                x1 += dx1 * dt;
+                const u_delayed = 2 * x1 - u;
+                const dx2 = (K * u_delayed - x2) / T;
+                x2 += dx2 * dt;
+
+                const y = x2;
+                yArr[i] = y;
+                prevError = error;
+                prevY = y;
+            }
+            return yArr;
+        }
+
+        // ================================================================
+        //  3. 指标
+        // ================================================================
+        function calcMetrics(y, t, target) {
+            const n = y.length;
+            const maxVal = Math.max(...y);
+            const overshoot = ((maxVal - target) / target) * 100;
+            const startIdx = Math.floor(n * 0.7);
+            const steady = y.slice(startIdx).reduce((a, b) => a + b, 0) / (n - startIdx);
+            const steadyErr = Math.abs(steady - target) / target * 100;
+            const band = 0.05 * target;
+            let settleTime = t[n - 1];
+            for (let i = n - 1; i >= 0; i--) {
+                if (Math.abs(y[i] - target) > band) { settleTime = t[i]; break; }
+            }
+            return { overshoot, steadyErr, settleTime };
+        }
+
+        // ================================================================
+        //  4. 检测等幅振荡
+        // ================================================================
+        function detectOscillation(y, t) {
+            const n = y.length;
+            const peaks = [];
+            for (let i = 2; i < n - 2; i++) {
+                if (y[i] > y[i - 1] && y[i] > y[i + 1] && y[i] > 0.3) {
+                    peaks.push({ val: y[i], time: t[i] });
+                }
+            }
+            if (peaks.length < 4) return { isOscillating: false, Tu: 0 };
+
+            const lastPeaks = peaks.slice(-6);
+            if (lastPeaks.length < 4) return { isOscillating: false, Tu: 0 };
+
+            const periods = [];
+            for (let i = 1; i < lastPeaks.length; i++) {
+                periods.push(lastPeaks[i].time - lastPeaks[i - 1].time);
+            }
+            const avgPeriod = periods.reduce((a, b) => a + b, 0) / periods.length;
+
+            const recentVals = lastPeaks.slice(-4).map(p => p.val);
+            const avgVal = recentVals.reduce((a, b) => a + b, 0) / recentVals.length;
+            const maxDev = Math.max(...recentVals.map(v => Math.abs(v - avgVal) / avgVal));
+
+            const isOscillating = maxDev < 0.15 && periods.length > 0;
+            return { isOscillating, Tu: avgPeriod };
+        }
+
+        // ================================================================
+        //  5. 更新
+        // ================================================================
+        let chartP = null,
+            chartPID = null;
+
+        function updateAll() {
+            const K = obj.K,
+                T = obj.T,
+                tau = obj.tau;
+            const Kp = parseFloat(document.getElementById('sliderKp').value);
+
+            document.getElementById('valKp').textContent = Kp.toFixed(2);
+            document.getElementById('legendKp').textContent = Kp.toFixed(2);
+
+            // 缩短到15秒
+            const dt = 0.01,
+                tEnd = 15;
+            const t = [];
+            for (let i = 0; i <= tEnd / dt; i++) t.push(i * dt);
+            const target = 1.0;
+
+            const yP = simulate(Kp, 0, 0, obj, t);
+
+            const osc = detectOscillation(yP, t);
+            const statusBox = document.getElementById('statusBox');
+            const statusBadge = document.getElementById('statusBadge');
+
+            if (osc.isOscillating && Kp > 0.5) {
+                statusBox.className = 'status-box oscillating';
+                statusBox.innerHTML = `🔮 等幅振荡！T ≈ ${osc.Tu.toFixed(3)} s &nbsp;·&nbsp; 点击「记录临界」`;
+                statusBadge.innerHTML = `🔮 等幅振荡 T_u ≈ ${osc.Tu.toFixed(3)} s`;
+                statusBadge.style.background = '#2d1b3d';
+                statusBadge.style.color = '#7c3aed';
+            } else if (Kp < 0.5) {
+                statusBox.className = 'status-box idle';
+                statusBox.innerHTML = '⬆ 增大 Kp 直到出现等幅振荡';
+                statusBadge.innerHTML = '🔍 调 Kp 到等幅振荡';
+                statusBadge.style.background = '#1c2333';
+                statusBadge.style.color = '#8b949e';
+            } else {
+                statusBox.className = 'status-box idle';
+                statusBox.innerHTML = `Kp = ${Kp.toFixed(2)}，继续增大到等幅振荡`;
+                statusBadge.innerHTML = `🔍 Kp = ${Kp.toFixed(2)}`;
+                statusBadge.style.background = '#1c2333';
+                statusBadge.style.color = '#8b949e';
+            }
+
+            // ---- 图1：纯P ----
+            if (chartP) { chartP.destroy(); }
+            chartP = new Chart(document.getElementById('chartP'), {
+                type: 'line',
+                data: {
+                    labels: t,
+                    datasets: [{
+                        label: '纯P 闭环',
+                        data: yP,
+                        borderColor: '#3b82f6',
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        tension: 0.2,
+                    }, {
+                        label: '目标值',
+                        data: t.map(() => target),
+                        borderColor: '#e53e3e',
+                        borderWidth: 1.5,
+                        borderDash: [5, 5],
+                        pointRadius: 0,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: {
+                            title: { display: true, text: '时间 (s)', color: '#8b949e', font: { size: 10 } },
+                            grid: { color: 'rgba(48,54,61,0.2)' },
+                            ticks: { color: '#8b949e', maxTicksLimit: 10 }
+                        },
+                        y: {
+                            title: { display: true, text: 'y(t)', color: '#8b949e', font: { size: 10 } },
+                            min: -0.5,
+                            max: 2.5,
+                            grid: { color: 'rgba(48,54,61,0.2)' },
+                            ticks: { color: '#8b949e' }
+                        }
+                    }
+                }
+            });
+
+            // ---- 如果有记录 ----
+            if (recorded.Ku !== null && recorded.Tu !== null) {
+                const Ku = recorded.Ku,
+                    Tu = recorded.Tu;
+
+                // 三组参数
+                const p = { Kp: 0.5 * Ku, Ki: 0, Kd: 0 };
+                const pi = { Kp: 0.45 * Ku, Ki: 0.54 * Ku / Tu, Kd: 0 };
+                const pid = { Kp: 0.6 * Ku, Ki: 1.2 * Ku / Tu, Kd: 0.075 * Ku * Tu };
+
+                // 显示三组
+                document.getElementById('tKpP').textContent = p.Kp.toFixed(3);
+                document.getElementById('tKpPI').textContent = pi.Kp.toFixed(3);
+                document.getElementById('tKiPI').textContent = pi.Ki.toFixed(3);
+                document.getElementById('tKpPID').textContent = pid.Kp.toFixed(3);
+                document.getElementById('tKiPID').textContent = pid.Ki.toFixed(3);
+                document.getElementById('tKdPID').textContent = pid.Kd.toFixed(3);
+
+                document.getElementById('rKu').textContent = Ku.toFixed(3);
+                document.getElementById('rTu').textContent = Tu.toFixed(3);
+                document.getElementById('resultBadge').innerHTML =
+                    `✅ 整定完成 &nbsp;·&nbsp; K<sub>u</sub> = ${Ku.toFixed(3)} &nbsp; T<sub>u</sub> = ${Tu.toFixed(3)}`;
+
+                // PID响应
+                const yPID = simulate(pid.Kp, pid.Ki, pid.Kd, obj, t);
+                const m = calcMetrics(yPID, t, target);
+
+                document.getElementById('mOver').textContent = isFinite(m.overshoot) ? m.overshoot.toFixed(1) + '%' : '--';
+                document.getElementById('mSettle').textContent = isFinite(m.settleTime) ? m.settleTime.toFixed(2) + 's' :
+                '--';
+                document.getElementById('mErr').textContent = isFinite(m.steadyErr) ? m.steadyErr.toFixed(2) + '%' : '--';
+                document.getElementById('pidBadge').textContent =
+                    `超调: ${isFinite(m.overshoot) ? m.overshoot.toFixed(1) + '%' : '--'}`;
+
+                if (chartPID) { chartPID.destroy(); }
+                chartPID = new Chart(document.getElementById('chartPID'), {
+                    type: 'line',
+                    data: {
+                        labels: t,
+                        datasets: [{
+                            label: 'ZN-PID 闭环',
+                            data: yPID,
+                            borderColor: '#d69e2e',
+                            borderWidth: 2.5,
+                            pointRadius: 0,
+                            tension: 0.3,
+                        }, {
+                            label: '目标值',
+                            data: t.map(() => target),
+                            borderColor: '#e53e3e',
+                            borderWidth: 1.5,
+                            borderDash: [5, 5],
+                            pointRadius: 0,
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: {
+                            x: {
+                                title: { display: true, text: '时间 (s)', color: '#8b949e', font: { size: 10 } },
+                                grid: { color: 'rgba(48,54,61,0.2)' },
+                                ticks: { color: '#8b949e', maxTicksLimit: 10 }
+                            },
+                            y: {
+                                title: { display: true, text: 'y(t)', color: '#8b949e', font: { size: 10 } },
+                                min: -0.3,
+                                max: 2.0,
+                                grid: { color: 'rgba(48,54,61,0.2)' },
+                                ticks: { color: '#8b949e' }
+                            }
+                        }
+                    }
+                });
+
+                statusBox.className = 'status-box ready';
+                statusBox.innerHTML = `✅ 已记录！K_u = ${Ku.toFixed(3)}，T_u = ${Tu.toFixed(3)} · 三组参数见下表`;
+
+            } else {
+                // 无记录
+                document.getElementById('tKpP').textContent = '--';
+                document.getElementById('tKpPI').textContent = '--';
+                document.getElementById('tKiPI').textContent = '--';
+                document.getElementById('tKpPID').textContent = '--';
+                document.getElementById('tKiPID').textContent = '--';
+                document.getElementById('tKdPID').textContent = '--';
+                document.getElementById('rKu').textContent = '--';
+                document.getElementById('rTu').textContent = '--';
+                document.getElementById('mOver').textContent = '--';
+                document.getElementById('mSettle').textContent = '--';
+                document.getElementById('mErr').textContent = '--';
+                document.getElementById('pidBadge').textContent = '等待整定...';
+                document.getElementById('resultBadge').innerHTML = '⏳ 请先调 Kp 到等幅振荡并记录';
+
+                if (chartPID) { chartPID.destroy(); }
+                chartPID = new Chart(document.getElementById('chartPID'), {
+                    type: 'line',
+                    data: {
+                        labels: t,
+                        datasets: [{
+                            label: '等待整定...',
+                            data: t.map(() => 0),
+                            borderColor: '#30363d',
+                            borderWidth: 1,
+                            pointRadius: 0,
+                            borderDash: [4, 4],
+                        }, {
+                            label: '目标值',
+                            data: t.map(() => target),
+                            borderColor: '#e53e3e',
+                            borderWidth: 1.5,
+                            borderDash: [5, 5],
+                            pointRadius: 0,
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: {
+                            x: {
+                                title: { display: true, text: '时间 (s)', color: '#8b949e', font: { size: 10 } },
+                                grid: { color: 'rgba(48,54,61,0.2)' },
+                                ticks: { color: '#8b949e' }
+                            },
+                            y: {
+                                title: { display: true, text: 'y(t)', color: '#8b949e', font: { size: 10 } },
+                                min: -0.3,
+                                max: 2.0,
+                                grid: { color: 'rgba(48,54,61,0.2)' },
+                                ticks: { color: '#8b949e' }
+                            }
+                        }
+                    }
+                });
+            }
+        }
+
+        // ================================================================
+        //  6. 记录临界
+        // ================================================================
+        function recordCritical() {
+            const Kp = parseFloat(document.getElementById('sliderKp').value);
+
+            const dt = 0.01,
+                tEnd = 15;
+            const t = [];
+            for (let i = 0; i <= tEnd / dt; i++) t.push(i * dt);
+            const yP = simulate(Kp, 0, 0, obj, t);
+            const osc = detectOscillation(yP, t);
+
+            if (!osc.isOscillating || Kp < 0.5) {
+                alert('⚠️ 没有检测到等幅振荡！请增大 Kp 直到出现稳定的等幅振荡。');
+                return;
+            }
+
+            recorded.Ku = Kp;
+            recorded.Tu = osc.Tu;
+
+            document.getElementById('statusBox').className = 'status-box ready';
+            document.getElementById('statusBox').innerHTML =
+                `✅ 已记录！K_u = ${Kp.toFixed(3)}，T_u = ${osc.Tu.toFixed(3)}`;
+
+            updateAll();
+        }
+
+        // ================================================================
+        //  7. 事件
+        // ================================================================
+        function bindSlider(id, valId, key) {
+            const el = document.getElementById(id);
+            const display = document.getElementById(valId);
+            el.addEventListener('input', function() {
+                obj[key] = parseFloat(this.value);
+                display.textContent = obj[key].toFixed(2);
+            });
+        }
+        bindSlider('sliderK', 'valK', 'K');
+        bindSlider('sliderT', 'valT', 'T');
+        bindSlider('sliderTau', 'valTau', 'tau');
+
+        document.getElementById('sliderKp').addEventListener('input', function() {
+            document.getElementById('valKp').textContent = parseFloat(this.value).toFixed(2);
+            updateAll();
+        });
+
+        document.getElementById('btnRecord').addEventListener('click', recordCritical);
+        document.getElementById('btnReset').addEventListener('click', function() {
+            document.getElementById('sliderK').value = '1.0';
+            document.getElementById('sliderT').value = '1.0';
+            document.getElementById('sliderTau').value = '0.50';
+            document.getElementById('sliderKp').value = '2.0';
+            obj = { K: 1.0, T: 1.0, tau: 0.50 };
+            document.getElementById('valK').textContent = '1.00';
+            document.getElementById('valT').textContent = '1.00';
+            document.getElementById('valTau').textContent = '0.50';
+            document.getElementById('valKp').textContent = '2.00';
+
+            recorded = { Ku: null, Tu: null };
+            document.getElementById('rKu').textContent = '--';
+            document.getElementById('rTu').textContent = '--';
+            document.getElementById('resultBadge').innerHTML = '⏳ 等待记录临界值...';
+
+            updateAll();
+        });
+
+        // ================================================================
+        //  8. 启动
+        // ================================================================
+        updateAll();
+        console.log('✅ ZN整定法 已启动 · 仿真时间15秒 · 三组参数 P/PI/PID');
+    </script>
+
+</body>
+</html>
