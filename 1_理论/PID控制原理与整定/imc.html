@@ -1,0 +1,913 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IMC 内模控制 · λ 从 0 开始</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js">
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js">
+    </script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', 'PingFang SC', sans-serif;
+            background: #0d1117;
+            color: #e6edf3;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+        }
+        .container {
+            max-width: 1100px;
+            width: 100%;
+        }
+
+        .header {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            padding: 14px 24px;
+            margin-bottom: 16px;
+            text-align: center;
+        }
+        .header h1 {
+            font-size: 22px;
+        }
+        .header h1 .cyan {
+            color: #38bdf8;
+        }
+        .header .sub {
+            color: #8b949e;
+            font-size: 13px;
+            margin-top: 2px;
+        }
+
+        .param-bar {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 10px;
+            padding: 10px 16px;
+            margin-bottom: 16px;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: center;
+            gap: 8px 16px;
+        }
+        .param-bar .item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+        }
+        .param-bar .item label {
+            color: #8b949e;
+            font-weight: 500;
+        }
+        .param-bar .item input[type="range"] {
+            width: 90px;
+            accent-color: #38bdf8;
+            background: #0d1117;
+            height: 4px;
+            cursor: pointer;
+        }
+        .param-bar .item input[type="range"].lambda-slider {
+            accent-color: #fbbf24;
+            width: 130px;
+        }
+        .param-bar .item .val {
+            color: #38bdf8;
+            font-weight: 700;
+            font-family: 'Courier New', monospace;
+            min-width: 36px;
+            text-align: right;
+            font-size: 13px;
+        }
+        .param-bar .item .val.lambda-val {
+            color: #fbbf24;
+            min-width: 44px;
+        }
+        .param-bar .btn {
+            padding: 5px 16px;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 12px;
+            cursor: pointer;
+            background: #38bdf8;
+            color: #0d1117;
+            transition: 0.2s;
+        }
+        .param-bar .btn:hover {
+            background: #7dd3fc;
+        }
+        .param-bar .btn-outline {
+            background: transparent;
+            border: 1px solid #30363d;
+            color: #8b949e;
+        }
+        .param-bar .btn-outline:hover {
+            border-color: #38bdf8;
+            color: #38bdf8;
+        }
+
+        .card {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            padding: 14px 18px 16px 18px;
+            margin-bottom: 16px;
+        }
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin-bottom: 8px;
+        }
+        .card-header .title {
+            font-size: 15px;
+            font-weight: 600;
+        }
+        .card-header .badge {
+            font-size: 11px;
+            color: #8b949e;
+            background: #0d1117;
+            padding: 2px 10px;
+            border-radius: 10px;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 200px;
+        }
+
+        .legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px 20px;
+            margin-top: 4px;
+            font-size: 12px;
+            color: #8b949e;
+            justify-content: center;
+        }
+        .legend span {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .dot {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border-radius: 3px;
+        }
+        .dot.imc {
+            background: #38bdf8;
+        }
+        .dot.ideal {
+            background: #fbbf24;
+            border: 1px dashed #fbbf24;
+            background: transparent;
+        }
+        .dot.ref {
+            background: #e53e3e;
+        }
+        .dot.open {
+            background: #8b5cf6;
+        }
+
+        .row-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        .result-box {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 8px 24px;
+            background: #0d1117;
+            border-radius: 6px;
+            padding: 8px 14px;
+            margin-top: 6px;
+            border: 1px solid #21262d;
+            font-size: 13px;
+        }
+        .result-box span {
+            color: #8b949e;
+        }
+        .result-box span strong {
+            color: #38bdf8;
+            font-family: 'Courier New', monospace;
+        }
+
+        .table-wrap {
+            overflow-x: auto;
+            margin: 6px 0 4px 0;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        table th {
+            background: #0d1117;
+            font-weight: 600;
+            padding: 5px 10px;
+            text-align: center;
+            border: 1px solid #21262d;
+            color: #8b949e;
+        }
+        table td {
+            padding: 5px 10px;
+            text-align: center;
+            border: 1px solid #21262d;
+            font-family: 'Courier New', monospace;
+            font-weight: 600;
+        }
+        table tr.highlight {
+            background: #1c2333;
+        }
+        table tr.highlight td {
+            border-color: #38bdf8;
+            color: #38bdf8;
+        }
+        table td .num {
+            color: #38bdf8;
+        }
+        table td .num.gold {
+            color: #fbbf24;
+        }
+        table td .num.green {
+            color: #48bb78;
+        }
+
+        .formula-box {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 8px;
+            margin-top: 8px;
+        }
+        .formula-box .item {
+            background: #0d1117;
+            border: 1px solid #21262d;
+            border-radius: 6px;
+            padding: 8px 10px;
+            text-align: center;
+            font-size: 12px;
+            color: #8b949e;
+        }
+        .formula-box .item .label {
+            font-weight: 600;
+            color: #38bdf8;
+        }
+        .formula-box .item .math {
+            font-family: 'Courier New', monospace;
+            color: #e6edf3;
+            font-size: 13px;
+        }
+
+        .note {
+            font-size: 12px;
+            color: #8b949e;
+            text-align: center;
+            padding-top: 8px;
+            margin-top: 8px;
+            border-top: 1px solid #21262d;
+            line-height: 1.6;
+        }
+        .note .cyan {
+            color: #38bdf8;
+        }
+        .note .gold {
+            color: #fbbf24;
+        }
+
+        .metrics {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 6px 20px;
+            background: #0d1117;
+            border-radius: 6px;
+            padding: 6px 14px;
+            margin-top: 6px;
+            border: 1px solid #21262d;
+            font-size: 12px;
+        }
+        .metrics span {
+            color: #8b949e;
+        }
+        .metrics span strong {
+            color: #38bdf8;
+        }
+        .metrics span strong.gold {
+            color: #fbbf24;
+        }
+        .metrics span strong.green {
+            color: #48bb78;
+        }
+
+        /* lambda 提示条 */
+        .lambda-hint {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 12px;
+            background: #1c2333;
+            border-radius: 6px;
+            padding: 4px 16px;
+            margin-top: 4px;
+            font-size: 12px;
+            color: #8b949e;
+            border: 1px solid #21262d;
+        }
+        .lambda-hint .bar {
+            width: 120px;
+            height: 4px;
+            background: linear-gradient(to right, #fbbf24, #38bdf8, #48bb78);
+            border-radius: 2px;
+        }
+        .lambda-hint .label {
+            font-weight: 600;
+        }
+        .lambda-hint .label.fast {
+            color: #fbbf24;
+        }
+        .lambda-hint .label.slow {
+            color: #48bb78;
+        }
+
+        @media (max-width: 850px) {
+            .row-2 {
+                grid-template-columns: 1fr;
+            }
+            .formula-box {
+                grid-template-columns: 1fr;
+            }
+        }
+        @media (max-width: 600px) {
+            .param-bar {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .param-bar .item {
+                justify-content: space-between;
+            }
+            .param-bar .item input[type="range"] {
+                flex: 1;
+            }
+            .chart-container {
+                height: 160px;
+            }
+            table {
+                font-size: 11px;
+            }
+            table td,
+            table th {
+                padding: 3px 6px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+
+        <!-- ===== 头部 ===== -->
+        <div class="header">
+            <h1>🎯 IMC <span class="cyan">内模控制</span></h1>
+            <div class="sub">
+                \(G(s)=\dfrac{K e^{-\tau s}}{Ts+1}\) &nbsp;·&nbsp; 拆分 \(G_-\) / \(G_+\) → \(G_{IMC} = G_-^{-1} \cdot f(s)\) → 等效 PID
+            </div>
+        </div>
+
+        <!-- ===== 参数栏 ===== -->
+        <div class="param-bar">
+            <div class="item">
+                <label>K</label>
+                <input type="range" id="sliderK" min="0.3" max="3.0" step="0.05" value="1.0">
+                <span class="val" id="valK">1.00</span>
+            </div>
+            <div class="item">
+                <label>T</label>
+                <input type="range" id="sliderT" min="0.3" max="4.0" step="0.05" value="1.0">
+                <span class="val" id="valT">1.00</span>
+            </div>
+            <div class="item">
+                <label>τ</label>
+                <input type="range" id="sliderTau" min="0" max="1.5" step="0.02" value="0.50">
+                <span class="val" id="valTau">0.50</span>
+            </div>
+            <div style="border-left:2px solid #30363d;height:26px;"></div>
+            <div class="item" style="background:#1c2333;padding:2px 12px 2px 8px;border-radius:6px;border:1px solid #fbbf24;">
+                <label style="color:#fbbf24;font-weight:700;">λ</label>
+                <input type="range" class="lambda-slider" id="sliderLambda" min="0" max="3.0" step="0.01" value="0.50">
+                <span class="val lambda-val" id="valLambda">0.50</span>
+            </div>
+            <button class="btn" id="btnUpdate">⟳ 更新</button>
+            <button class="btn btn-outline" id="btnReset">↺ 重置</button>
+        </div>
+
+        <!-- λ 提示条 -->
+        <div class="lambda-hint">
+            <span class="label fast">⚡ λ→0 响应快</span>
+            <span class="bar"></span>
+            <span class="label slow">🐢 λ 大 响应慢</span>
+            <span style="color:#fbbf24;font-weight:600;">当前 λ = <span id="lambdaDisplay">0.50</span></span>
+        </div>
+
+        <!-- ===== 两列 ===== -->
+        <div class="row-2">
+
+            <!-- 图1：开环 -->
+            <div class="card">
+                <div class="card-header">
+                    <span class="title">📊 开环阶跃响应</span>
+                    <span class="badge" id="decompBadge">提取 \(K, T, \tau\)</span>
+                </div>
+                <div class="chart-container">
+                    <canvas id="chartOpen"></canvas>
+                </div>
+                <div class="legend">
+                    <span><span class="dot open"></span> 开环响应</span>
+                    <span><span class="dot ref"></span> 稳态值 \(K\)</span>
+                </div>
+                <div class="result-box">
+                    <span>\(K =\) <strong id="eK">--</strong></span>
+                    <span>\(T =\) <strong id="eT">--</strong></span>
+                    <span>\(\tau =\) <strong id="eTau">--</strong></span>
+                    <span style="color:#38bdf8;" id="gPlusLabel">\(G_+ = 1\)</span>
+                </div>
+            </div>
+
+            <!-- 图2：IMC 闭环 -->
+            <div class="card">
+                <div class="card-header">
+                    <span class="title">📈 IMC 闭环阶跃响应</span>
+                    <span class="badge" id="pidBadge">超调: --</span>
+                </div>
+                <div class="chart-container">
+                    <canvas id="chartIMC"></canvas>
+                </div>
+                <div class="legend">
+                    <span><span class="dot imc"></span> IMC 闭环</span>
+                    <span><span class="dot ideal"></span> 理想闭环 \(1/(\lambda s+1)\)</span>
+                    <span><span class="dot ref"></span> 目标值 (1.0)</span>
+                </div>
+                <div class="metrics">
+                    <span>超调 <strong id="mOver">--</strong></span>
+                    <span>调节时间 <strong class="gold" id="mSettle">--</strong></span>
+                    <span>稳态误差 <strong class="green" id="mErr">--</strong></span>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- ===== IMC 参数 ===== -->
+        <div class="card">
+            <div class="card-header">
+                <span class="title">📐 IMC → 等效 PID 参数</span>
+                <span class="badge" style="color:#fbbf24;">λ = <span id="paramLambda">0.50</span></span>
+            </div>
+
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="width:100px;">控制器</th>
+                            <th>\(K_p\)</th>
+                            <th>\(T_i\)</th>
+                            <th>\(T_d\)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>P</strong></td>
+                            <td><span class="num" id="tKpP">--</span></td>
+                            <td>—</td>
+                            <td>—</td>
+                        </tr>
+                        <tr>
+                            <td><strong>PI</strong></td>
+                            <td><span class="num" id="tKpPI">--</span></td>
+                            <td><span class="num gold" id="tTiPI">--</span></td>
+                            <td>—</td>
+                        </tr>
+                        <tr class="highlight">
+                            <td><strong>PID</strong> ← 推荐</td>
+                            <td><span class="num" id="tKpPID">--</span></td>
+                            <td><span class="num gold" id="tTiPID">--</span></td>
+                            <td><span class="num green" id="tTdPID">--</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- 公式 -->
+            <div class="formula-box">
+                <div class="item">
+                    <div class="label">P</div>
+                    <div class="math">\(K_p = \dfrac{T}{K(\lambda+\tau)}\)</div>
+                </div>
+                <div class="item">
+                    <div class="label">PI</div>
+                    <div class="math">\(K_p = \dfrac{T}{K(\lambda+\tau)}\)，\(T_i = T\)</div>
+                </div>
+                <div class="item" style="border-color:#fbbf24;">
+                    <div class="label" style="color:#fbbf24;">PID ★</div>
+                    <div class="math">\(K_p = \dfrac{T}{K(\lambda+\tau)}\)，\(T_i = T\)，\(T_d = \dfrac{\tau}{2}\)</div>
+                </div>
+            </div>
+
+            <div class="note">
+                <span class="cyan">💡 IMC 设计：</span>
+                \(G_{IMC} = G_-^{-1} \cdot f(s)\)，\(f(s)=\dfrac{1}{\lambda s+1}\)
+                &nbsp;·&nbsp;
+                等效闭环 \(G_{ideal}(s)=\dfrac{1}{\lambda s+1}\)
+                <span style="display:block;font-size:11px;color:#8b949e;margin-top:4px;">
+                    <span class="gold">λ</span> 越小响应越快（λ→0 接近理想），但控制器增益越大，鲁棒性越差
+                </span>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // ================================================================
+        //  1. 被控对象
+        // ================================================================
+        let obj = { K: 1.0, T: 1.0, tau: 0.50 };
+        let lambda = 0.50;
+
+        // ================================================================
+        //  2. 仿真
+        // ================================================================
+        function simulateOpen(obj, t) {
+            const dt = t[1] - t[0];
+            const n = t.length;
+            const K = obj.K,
+                T = obj.T,
+                tau = obj.tau;
+
+            if (tau < 0.001) {
+                let y = 0;
+                const yArr = new Float64Array(n);
+                for (let i = 0; i < n; i++) {
+                    y += ((K - y) / T) * dt;
+                    yArr[i] = y;
+                }
+                return yArr;
+            }
+
+            const tau2 = tau / 2;
+            let x1 = 0,
+                x2 = 0;
+            const yArr = new Float64Array(n);
+            const u = 1.0;
+            for (let i = 0; i < n; i++) {
+                x1 += ((u - x1) / tau2) * dt;
+                const u_delayed = 2 * x1 - u;
+                x2 += ((K * u_delayed - x2) / T) * dt;
+                yArr[i] = x2;
+            }
+            return yArr;
+        }
+
+        function simulateIMC(Kp, Ki, Kd, obj, t) {
+            const dt = t[1] - t[0];
+            const n = t.length;
+            const K = obj.K,
+                T = obj.T,
+                tau = obj.tau;
+
+            if (tau < 0.001) {
+                let y = 0,
+                    integral = 0,
+                    prevError = 0,
+                    prevY = 0;
+                const yArr = new Float64Array(n);
+                const target = 1.0;
+                for (let i = 0; i < n; i++) {
+                    const error = target - prevY;
+                    const P = Kp * error;
+                    integral += Ki * error * dt;
+                    const D = Kd * (error - prevError) / dt;
+                    let u = P + integral + D;
+                    if (u > 50) u = 50;
+                    if (u < -50) u = -50;
+                    y += ((K * u - y) / T) * dt;
+                    yArr[i] = y;
+                    prevError = error;
+                    prevY = y;
+                }
+                return yArr;
+            }
+
+            const tau2 = tau / 2;
+            let x1 = 0,
+                x2 = 0;
+            let integral = 0,
+                prevError = 0,
+                prevY = 0;
+            const yArr = new Float64Array(n);
+            const target = 1.0;
+
+            for (let i = 0; i < n; i++) {
+                const error = target - prevY;
+                const P = Kp * error;
+                integral += Ki * error * dt;
+                const D = Kd * (error - prevError) / dt;
+                let u = P + integral + D;
+                if (u > 50) u = 50;
+                if (u < -50) u = -50;
+
+                x1 += ((u - x1) / tau2) * dt;
+                const u_delayed = 2 * x1 - u;
+                x2 += ((K * u_delayed - x2) / T) * dt;
+
+                const y = x2;
+                yArr[i] = y;
+                prevError = error;
+                prevY = y;
+            }
+            return yArr;
+        }
+
+        // ================================================================
+        //  3. 提取 K, T, tau
+        // ================================================================
+        function extractParams(y, t) {
+            const n = y.length;
+            const K = y[n - 1];
+            const target63 = 0.632 * K;
+            let idx63 = n - 1;
+            for (let i = 0; i < n; i++) {
+                if (y[i] >= target63) { idx63 = i; break; }
+            }
+            const t63 = t[idx63];
+            const threshold = 0.02 * K;
+            let idxStart = 0;
+            for (let i = 0; i < n; i++) {
+                if (y[i] >= threshold) { idxStart = i; break; }
+            }
+            const tau = t[idxStart];
+            const T = t63 - tau;
+            return { K, T, tau };
+        }
+
+        // ================================================================
+        //  4. IMC 参数
+        // ================================================================
+        function calcIMC(K, T, tau, lambda) {
+            const eps = 1e-8;
+            const denom = K * (lambda + tau + eps);
+
+            const Kp_p = T / denom;
+            const Kp_pi = T / denom;
+            const Ti_pi = T;
+            const Kp_pid = T / denom;
+            const Ti_pid = T;
+            const Td_pid = tau / 2;
+
+            return {
+                p: { Kp: Kp_p, Ki: 0, Kd: 0 },
+                pi: { Kp: Kp_pi, Ki: Kp_pi / Ti_pi, Kd: 0 },
+                pid: { Kp: Kp_pid, Ki: Kp_pid / Ti_pid, Kd: Kp_pid * Td_pid },
+                Ti_pi: Ti_pi,
+                Ti_pid: Ti_pid,
+                Td_pid: Td_pid
+            };
+        }
+
+        // ================================================================
+        //  5. 指标
+        // ================================================================
+        function calcMetrics(y, t, target) {
+            const n = y.length;
+            const maxVal = Math.max(...y);
+            const overshoot = ((maxVal - target) / target) * 100;
+            const startIdx = Math.floor(n * 0.7);
+            const steady = y.slice(startIdx).reduce((a, b) => a + b, 0) / (n - startIdx);
+            const steadyErr = Math.abs(steady - target) / target * 100;
+            const band = 0.05 * target;
+            let settleTime = t[n - 1];
+            for (let i = n - 1; i >= 0; i--) {
+                if (Math.abs(y[i] - target) > band) { settleTime = t[i]; break; }
+            }
+            return { overshoot, steadyErr, settleTime };
+        }
+
+        // ================================================================
+        //  6. 更新
+        // ================================================================
+        let chartOpen = null,
+            chartIMC = null;
+
+        function updateAll() {
+            const K = obj.K,
+                T = obj.T,
+                tau = obj.tau;
+            const lam = lambda;
+
+            document.getElementById('lambdaDisplay').textContent = lam.toFixed(2);
+            document.getElementById('paramLambda').textContent = lam.toFixed(2);
+
+            const dt = 0.01,
+                tEnd = 15;
+            const t = [];
+            for (let i = 0; i <= tEnd / dt; i++) t.push(i * dt);
+            const target = 1.0;
+
+            // ---- 开环 ----
+            const yOpen = simulateOpen(obj, t);
+            const params = extractParams(yOpen, t);
+
+            document.getElementById('eK').textContent = params.K.toFixed(3);
+            document.getElementById('eT').textContent = params.T.toFixed(3);
+            document.getElementById('eTau').textContent = params.tau.toFixed(3);
+            document.getElementById('gPlusLabel').textContent =
+                params.tau < 0.001 ? '\(G_+ = 1\) (无可逆部分)' : `\(G_+ = e^{-${params.tau.toFixed(2)}s}\) (纯滞后)`;
+
+
+            // ---- IMC ----
+            const imc = calcIMC(params.K, params.T, params.tau, lam);
+
+            document.getElementById('tKpP').textContent = imc.p.Kp.toFixed(3);
+            document.getElementById('tKpPI').textContent = imc.pi.Kp.toFixed(3);
+            document.getElementById('tTiPI').textContent = imc.Ti_pi.toFixed(3);
+            document.getElementById('tKpPID').textContent = imc.pid.Kp.toFixed(3);
+            document.getElementById('tTiPID').textContent = imc.Ti_pid.toFixed(3);
+            document.getElementById('tTdPID').textContent = imc.Td_pid.toFixed(3);
+
+            // ---- 闭环 ----
+            const yIMC = simulateIMC(imc.pid.Kp, imc.pid.Ki, imc.pid.Kd, obj, t);
+
+            // 理想闭环
+            const yIdeal = t.map(ti => 1 - Math.exp(-ti / (lam + 0.001)));
+
+            // ---- 指标 ----
+            const m = calcMetrics(yIMC, t, target);
+            document.getElementById('mOver').textContent = isFinite(m.overshoot) ? m.overshoot.toFixed(1) + '%' : '--';
+            document.getElementById('mSettle').textContent = isFinite(m.settleTime) ? m.settleTime.toFixed(2) + 's' : '--';
+            document.getElementById('mErr').textContent = isFinite(m.steadyErr) ? m.steadyErr.toFixed(2) + '%' : '--';
+            document.getElementById('pidBadge').textContent =
+                `超调: ${isFinite(m.overshoot) ? m.overshoot.toFixed(1) + '%' : '--'}`;
+
+            // ---- 图1：开环 ----
+            if (chartOpen) { chartOpen.destroy(); }
+            chartOpen = new Chart(document.getElementById('chartOpen'), {
+                type: 'line',
+                data: {
+                    labels: t,
+                    datasets: [{
+                        label: '开环响应',
+                        data: yOpen,
+                        borderColor: '#8b5cf6',
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        tension: 0.2,
+                    }, {
+                        label: '稳态 K',
+                        data: t.map(() => params.K),
+                        borderColor: '#e53e3e',
+                        borderWidth: 1.5,
+                        borderDash: [5, 5],
+                        pointRadius: 0,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: {
+                            title: { display: true, text: '时间 (s)', color: '#8b949e', font: { size: 10 } },
+                            grid: { color: 'rgba(48,54,61,0.2)' },
+                            ticks: { color: '#8b949e', maxTicksLimit: 10 }
+                        },
+                        y: {
+                            title: { display: true, text: 'y(t)', color: '#8b949e', font: { size: 10 } },
+                            min: 0,
+                            max: Math.max(params.K * 1.3, 1.5),
+                            grid: { color: 'rgba(48,54,61,0.2)' },
+                            ticks: { color: '#8b949e' }
+                        }
+                    }
+                }
+            });
+
+            // ---- 图2：IMC 闭环 ----
+            if (chartIMC) { chartIMC.destroy(); }
+            chartIMC = new Chart(document.getElementById('chartIMC'), {
+                type: 'line',
+                data: {
+                    labels: t,
+                    datasets: [{
+                        label: 'IMC 闭环',
+                        data: yIMC,
+                        borderColor: '#38bdf8',
+                        borderWidth: 2.5,
+                        pointRadius: 0,
+                        tension: 0.3,
+                    }, {
+                        label: '理想闭环 1/(λs+1)',
+                        data: yIdeal,
+                        borderColor: '#fbbf24',
+                        borderWidth: 2,
+                        borderDash: [6, 4],
+                        pointRadius: 0,
+                        tension: 0.3,
+                    }, {
+                        label: '目标值',
+                        data: t.map(() => target),
+                        borderColor: '#e53e3e',
+                        borderWidth: 1.5,
+                        borderDash: [5, 5],
+                        pointRadius: 0,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function(ctx) {
+                                    return ctx.dataset.label + ': ' + ctx.parsed.y.toFixed(3);
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            title: { display: true, text: '时间 (s)', color: '#8b949e', font: { size: 10 } },
+                            grid: { color: 'rgba(48,54,61,0.2)' },
+                            ticks: { color: '#8b949e', maxTicksLimit: 10 }
+                        },
+                        y: {
+                            title: { display: true, text: 'y(t)', color: '#8b949e', font: { size: 10 } },
+                            min: 0,
+                            max: 2.0,
+                            grid: { color: 'rgba(48,54,61,0.2)' },
+                            ticks: { color: '#8b949e' }
+                        }
+                    }
+                }
+            });
+        }
+
+        // ================================================================
+        //  7. 事件
+        // ================================================================
+        function bindSlider(id, valId, key) {
+            const el = document.getElementById(id);
+            const display = document.getElementById(valId);
+            el.addEventListener('input', function() {
+                obj[key] = parseFloat(this.value);
+                display.textContent = obj[key].toFixed(2);
+            });
+        }
+        bindSlider('sliderK', 'valK', 'K');
+        bindSlider('sliderT', 'valT', 'T');
+        bindSlider('sliderTau', 'valTau', 'tau');
+
+        document.getElementById('sliderLambda').addEventListener('input', function() {
+            lambda = parseFloat(this.value);
+            document.getElementById('valLambda').textContent = lambda.toFixed(2);
+            updateAll();
+        });
+
+        document.getElementById('btnUpdate').addEventListener('click', updateAll);
+        document.getElementById('btnReset').addEventListener('click', function() {
+            document.getElementById('sliderK').value = '1.0';
+            document.getElementById('sliderT').value = '1.0';
+            document.getElementById('sliderTau').value = '0.50';
+            document.getElementById('sliderLambda').value = '0.50';
+            obj = { K: 1.0, T: 1.0, tau: 0.50 };
+            lambda = 0.50;
+            document.getElementById('valK').textContent = '1.00';
+            document.getElementById('valT').textContent = '1.00';
+            document.getElementById('valTau').textContent = '0.50';
+            document.getElementById('valLambda').textContent = '0.50';
+            updateAll();
+        });
+
+        // ================================================================
+        //  8. 启动
+        // ================================================================
+        updateAll();
+        console.log('✅ IMC 内模控制 已启动 (λ从0开始)');
+    </script>
+
+</body>
+</html>

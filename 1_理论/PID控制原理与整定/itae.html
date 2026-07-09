@@ -1,0 +1,849 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ITAE 最优整定法 · 一阶系统 + PI</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js">
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js">
+    </script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', 'PingFang SC', sans-serif;
+            background: #0d1117;
+            color: #e6edf3;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+        }
+        .container {
+            max-width: 1100px;
+            width: 100%;
+        }
+
+        .header {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            padding: 14px 24px;
+            margin-bottom: 16px;
+            text-align: center;
+        }
+        .header h1 {
+            font-size: 22px;
+        }
+        .header h1 .pink {
+            color: #f472b6;
+        }
+        .header .sub {
+            color: #8b949e;
+            font-size: 13px;
+            margin-top: 2px;
+        }
+        .header .sub .formula {
+            color: #f472b6;
+            font-weight: 600;
+        }
+
+        .param-bar {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 10px;
+            padding: 10px 16px;
+            margin-bottom: 16px;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: center;
+            gap: 8px 16px;
+        }
+        .param-bar .item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+        }
+        .param-bar .item label {
+            color: #8b949e;
+            font-weight: 500;
+        }
+        .param-bar .item input[type="range"] {
+            width: 90px;
+            accent-color: #f472b6;
+            background: #0d1117;
+            height: 4px;
+            cursor: pointer;
+        }
+        .param-bar .item input[type="range"].wn-slider {
+            accent-color: #fbbf24;
+            width: 130px;
+        }
+        .param-bar .item .val {
+            color: #f472b6;
+            font-weight: 700;
+            font-family: 'Courier New', monospace;
+            min-width: 36px;
+            text-align: right;
+            font-size: 13px;
+        }
+        .param-bar .item .val.wn-val {
+            color: #fbbf24;
+            min-width: 44px;
+        }
+        .param-bar .btn {
+            padding: 5px 16px;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 12px;
+            cursor: pointer;
+            background: #f472b6;
+            color: #0d1117;
+            transition: 0.2s;
+        }
+        .param-bar .btn:hover {
+            background: #f9a8d4;
+        }
+        .param-bar .btn-outline {
+            background: transparent;
+            border: 1px solid #30363d;
+            color: #8b949e;
+        }
+        .param-bar .btn-outline:hover {
+            border-color: #f472b6;
+            color: #f472b6;
+        }
+
+        .card {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            padding: 14px 18px 16px 18px;
+            margin-bottom: 16px;
+        }
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin-bottom: 8px;
+        }
+        .card-header .title {
+            font-size: 15px;
+            font-weight: 600;
+        }
+        .card-header .badge {
+            font-size: 11px;
+            color: #8b949e;
+            background: #0d1117;
+            padding: 2px 10px;
+            border-radius: 10px;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 200px;
+        }
+
+        .legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px 20px;
+            margin-top: 4px;
+            font-size: 12px;
+            color: #8b949e;
+            justify-content: center;
+        }
+        .legend span {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .dot {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border-radius: 3px;
+        }
+        .dot.itae {
+            background: #f472b6;
+        }
+        .dot.ideal {
+            background: #fbbf24;
+            border: 1px dashed #fbbf24;
+            background: transparent;
+        }
+        .dot.ref {
+            background: #e53e3e;
+        }
+        .dot.open {
+            background: #8b5cf6;
+        }
+
+        .row-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        .result-box {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 8px 24px;
+            background: #0d1117;
+            border-radius: 6px;
+            padding: 8px 14px;
+            margin-top: 6px;
+            border: 1px solid #21262d;
+            font-size: 13px;
+        }
+        .result-box span {
+            color: #8b949e;
+        }
+        .result-box span strong {
+            color: #f472b6;
+            font-family: 'Courier New', monospace;
+        }
+
+        .table-wrap {
+            overflow-x: auto;
+            margin: 6px 0 4px 0;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        table th {
+            background: #0d1117;
+            font-weight: 600;
+            padding: 5px 10px;
+            text-align: center;
+            border: 1px solid #21262d;
+            color: #8b949e;
+        }
+        table td {
+            padding: 5px 10px;
+            text-align: center;
+            border: 1px solid #21262d;
+            font-family: 'Courier New', monospace;
+            font-weight: 600;
+        }
+        table tr.highlight {
+            background: #1c2333;
+        }
+        table tr.highlight td {
+            border-color: #f472b6;
+            color: #f472b6;
+        }
+        table td .num {
+            color: #f472b6;
+        }
+        table td .num.gold {
+            color: #fbbf24;
+        }
+
+        .formula-box {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 8px;
+            margin-top: 8px;
+        }
+        .formula-box .item {
+            background: #0d1117;
+            border: 1px solid #21262d;
+            border-radius: 6px;
+            padding: 8px 10px;
+            text-align: center;
+            font-size: 12px;
+            color: #8b949e;
+        }
+        .formula-box .item .label {
+            font-weight: 600;
+            color: #f472b6;
+        }
+        .formula-box .item .math {
+            font-family: 'Courier New', monospace;
+            color: #e6edf3;
+            font-size: 13px;
+        }
+
+        .note {
+            font-size: 12px;
+            color: #8b949e;
+            text-align: center;
+            padding-top: 8px;
+            margin-top: 8px;
+            border-top: 1px solid #21262d;
+            line-height: 1.6;
+        }
+        .note .pink {
+            color: #f472b6;
+        }
+        .note .gold {
+            color: #fbbf24;
+        }
+
+        .metrics {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 6px 20px;
+            background: #0d1117;
+            border-radius: 6px;
+            padding: 6px 14px;
+            margin-top: 6px;
+            border: 1px solid #21262d;
+            font-size: 12px;
+        }
+        .metrics span {
+            color: #8b949e;
+        }
+        .metrics span strong {
+            color: #f472b6;
+        }
+        .metrics span strong.gold {
+            color: #fbbf24;
+        }
+        .metrics span strong.green {
+            color: #48bb78;
+        }
+
+        .wn-hint {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 12px;
+            background: #1c2333;
+            border-radius: 6px;
+            padding: 4px 16px;
+            margin-top: 4px;
+            font-size: 12px;
+            color: #8b949e;
+            border: 1px solid #21262d;
+        }
+        .wn-hint .bar {
+            width: 120px;
+            height: 4px;
+            background: linear-gradient(to right, #fbbf24, #f472b6, #48bb78);
+            border-radius: 2px;
+        }
+        .wn-hint .label {
+            font-weight: 600;
+        }
+        .wn-hint .label.fast {
+            color: #fbbf24;
+        }
+        .wn-hint .label.slow {
+            color: #48bb78;
+        }
+
+        @media (max-width: 850px) {
+            .row-2 {
+                grid-template-columns: 1fr;
+            }
+            .formula-box {
+                grid-template-columns: 1fr;
+            }
+        }
+        @media (max-width: 600px) {
+            .param-bar {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .param-bar .item {
+                justify-content: space-between;
+            }
+            .param-bar .item input[type="range"] {
+                flex: 1;
+            }
+            .chart-container {
+                height: 160px;
+            }
+            table {
+                font-size: 11px;
+            }
+            table td,
+            table th {
+                padding: 3px 6px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+
+        <!-- ===== 头部 ===== -->
+        <div class="header">
+            <h1>🎯 ITAE <span class="pink">最优整定法</span></h1>
+            <div class="sub">
+                <span class="formula">\(G(s)=\dfrac{K}{Ts+1}\)</span>
+                &nbsp;·&nbsp; 选择 \(\omega_n\) → 期望闭环 \(T_{des}=\dfrac{\omega_n}{s+\omega_n}\) → 反推 PI 控制器
+            </div>
+        </div>
+
+        <!-- ===== 参数栏 ===== -->
+        <div class="param-bar">
+            <div class="item">
+                <label>K</label>
+                <input type="range" id="sliderK" min="0.3" max="3.0" step="0.05" value="1.0">
+                <span class="val" id="valK">1.00</span>
+            </div>
+            <div class="item">
+                <label>T</label>
+                <input type="range" id="sliderT" min="0.3" max="4.0" step="0.05" value="1.0">
+                <span class="val" id="valT">1.00</span>
+            </div>
+            <div style="border-left:2px solid #30363d;height:26px;"></div>
+            <div class="item" style="background:#1c2333;padding:2px 12px 2px 8px;border-radius:6px;border:1px solid #fbbf24;">
+                <label style="color:#fbbf24;font-weight:700;">\(\omega_n\)</label>
+                <input type="range" class="wn-slider" id="sliderWn" min="0.2" max="10.0" step="0.05" value="2.0">
+                <span class="val wn-val" id="valWn">2.00</span>
+            </div>
+            <button class="btn" id="btnUpdate">⟳ 更新</button>
+            <button class="btn btn-outline" id="btnReset">↺ 重置</button>
+        </div>
+
+        <!-- ωₙ 提示条 -->
+        <div class="wn-hint">
+            <span class="label fast">⚡ \(\omega_n\) 大 → 响应快</span>
+            <span class="bar"></span>
+            <span class="label slow">🐢 \(\omega_n\) 小 → 响应慢</span>
+            <span style="color:#fbbf24;font-weight:600;">当前 \(\omega_n = \) <span id="wnDisplay">2.00</span></span>
+        </div>
+
+        <!-- ===== 两列 ===== -->
+        <div class="row-2">
+
+            <!-- 图1：开环 -->
+            <div class="card">
+                <div class="card-header">
+                    <span class="title">📊 开环阶跃响应</span>
+                    <span class="badge">提取 \(K, T\)</span>
+                </div>
+                <div class="chart-container">
+                    <canvas id="chartOpen"></canvas>
+                </div>
+                <div class="legend">
+                    <span><span class="dot open"></span> 开环响应</span>
+                    <span><span class="dot ref"></span> 稳态值 \(K\)</span>
+                </div>
+                <div class="result-box">
+                    <span>\(K =\) <strong id="eK">--</strong></span>
+                    <span>\(T =\) <strong id="eT">--</strong></span>
+                </div>
+            </div>
+
+            <!-- 图2：ITAE 闭环 -->
+            <div class="card">
+                <div class="card-header">
+                    <span class="title">📈 ITAE 闭环阶跃响应</span>
+                    <span class="badge" id="pidBadge">超调: --</span>
+                </div>
+                <div class="chart-container">
+                    <canvas id="chartITAE"></canvas>
+                </div>
+                <div class="legend">
+                    <span><span class="dot itae"></span> ITAE-PI 闭环</span>
+                    <span><span class="dot ideal"></span> 期望闭环 \(T_{des}\)</span>
+                    <span><span class="dot ref"></span> 目标值 (1.0)</span>
+                </div>
+                <div class="metrics">
+                    <span>超调 <strong id="mOver">--</strong></span>
+                    <span>调节时间 <strong class="gold" id="mSettle">--</strong></span>
+                    <span>稳态误差 <strong class="green" id="mErr">--</strong></span>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- ===== ITAE 参数 ===== -->
+        <div class="card">
+            <div class="card-header">
+                <span class="title">📐 ITAE → PI 控制器参数</span>
+                <span class="badge" style="color:#fbbf24;">\(\omega_n = \) <span id="paramWn">2.00</span></span>
+            </div>
+
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="width:120px;">控制器</th>
+                            <th>\(K_p\)</th>
+                            <th>\(T_i\)</th>
+                            <th>\(T_d\)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>P</strong></td>
+                            <td><span class="num" id="tKpP">--</span></td>
+                            <td>—</td>
+                            <td>—</td>
+                        </tr>
+                        <tr class="highlight">
+                            <td><strong>PI</strong> ← ITAE 最优</td>
+                            <td><span class="num" id="tKpPI">--</span></td>
+                            <td><span class="num gold" id="tTiPI">--</span></td>
+                            <td>—</td>
+                        </tr>
+                        <tr>
+                            <td><strong>PID</strong> (参考)</td>
+                            <td><span class="num" id="tKpPID">--</span></td>
+                            <td><span class="num gold" id="tTiPID">--</span></td>
+                            <td><span class="num" id="tTdPID" style="color:#48bb78;">--</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- 公式 -->
+            <div class="formula-box">
+                <div class="item">
+                    <div class="label">设计目标</div>
+                    <div class="math">\(T_{des}(s)=\dfrac{\omega_n}{s+\omega_n}\)</div>
+                </div>
+                <div class="item">
+                    <div class="label">期望开环</div>
+                    <div class="math">\(L_{des}(s)=\dfrac{\omega_n}{s}\)</div>
+                </div>
+                <div class="item" style="border-color:#fbbf24;">
+                    <div class="label" style="color:#fbbf24;">PI 控制器 ★</div>
+                    <div class="math">\(K_p=\dfrac{\omega_n T}{K}\)，\(T_i = T\)</div>
+                </div>
+            </div>
+
+            <!-- 推导 -->
+            <div class="result-box" style="margin-top:8px;">
+                <span>\(G_c(s) = \dfrac{\omega_n(Ts+1)}{Ks} = \dfrac{\omega_n T}{K} + \dfrac{\omega_n}{Ks}\)</span>
+                <span style="color:#f472b6;">\(K_p = \dfrac{\omega_n T}{K}\)</span>
+                <span style="color:#fbbf24;">\(T_i = T\)</span>
+            </div>
+
+            <div class="note">
+                <span class="pink">✅ ITAE 最优整定：</span>
+                选择 \(\omega_n\) → 期望闭环 \(1/(s/\omega_n + 1)\) → 反推开环 \(L_{des} = \omega_n/s\) → 匹配 PI 参数
+                <span style="display:block;font-size:11px;color:#8b949e;margin-top:4px;">
+                    <span class="gold">\(\omega_n\)</span> 越大响应越快，但执行器输出越大。
+                    工程经验：\(\omega_n\) 取对象带宽的 2~5 倍。
+                </span>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // ================================================================
+        //  1. 被控对象 (无纯滞后)
+        // ================================================================
+        let obj = { K: 1.0, T: 1.0 };
+        let wn = 2.0;
+
+        // ================================================================
+        //  2. 仿真
+        // ================================================================
+        function simulateOpen(obj, t) {
+            const dt = t[1] - t[0];
+            const n = t.length;
+            const K = obj.K,
+                T = obj.T;
+            let y = 0;
+            const yArr = new Float64Array(n);
+            for (let i = 0; i < n; i++) {
+                y += ((K - y) / T) * dt;
+                yArr[i] = y;
+            }
+            return yArr;
+        }
+
+        function simulateClosed(Kp, Ki, Kd, obj, t) {
+            const dt = t[1] - t[0];
+            const n = t.length;
+            const K = obj.K,
+                T = obj.T;
+            let y = 0,
+                integral = 0,
+                prevError = 0,
+                prevY = 0;
+            const yArr = new Float64Array(n);
+            const target = 1.0;
+
+            for (let i = 0; i < n; i++) {
+                const error = target - prevY;
+                const P = Kp * error;
+                integral += Ki * error * dt;
+                const D = Kd * (error - prevError) / dt;
+                let u = P + integral + D;
+                if (u > 50) u = 50;
+                if (u < -50) u = -50;
+
+                y += ((K * u - y) / T) * dt;
+                yArr[i] = y;
+
+                prevError = error;
+                prevY = y;
+            }
+            return yArr;
+        }
+
+        // ================================================================
+        //  3. 提取 K, T
+        // ================================================================
+        function extractParams(y, t) {
+            const n = y.length;
+            const K = y[n - 1];
+            const target63 = 0.632 * K;
+            let idx63 = n - 1;
+            for (let i = 0; i < n; i++) {
+                if (y[i] >= target63) { idx63 = i; break; }
+            }
+            const t63 = t[idx63];
+            const T = t63;
+            return { K, T };
+        }
+
+        // ================================================================
+        //  4. ITAE 参数
+        // ================================================================
+        function calcITAE(K, T, wn) {
+            const Kp = (wn * T) / K;
+            const Ti = T;
+            const Ki = Kp / Ti;
+            // PID 参考（加一点微分改善响应，非 ITAE 标准）
+            const Kp_pid = Kp;
+            const Ki_pid = Ki;
+            const Kd_pid = 0.1 * Kp * T; // 经验值，仅作参考
+
+            return {
+                p: { Kp: Kp, Ki: 0, Kd: 0 },
+                pi: { Kp: Kp, Ki: Ki, Kd: 0 },
+                pid: { Kp: Kp_pid, Ki: Ki_pid, Kd: Kd_pid },
+                Ti: Ti
+            };
+        }
+
+        // ================================================================
+        //  5. 指标
+        // ================================================================
+        function calcMetrics(y, t, target) {
+            const n = y.length;
+            const maxVal = Math.max(...y);
+            const overshoot = ((maxVal - target) / target) * 100;
+            const startIdx = Math.floor(n * 0.7);
+            const steady = y.slice(startIdx).reduce((a, b) => a + b, 0) / (n - startIdx);
+            const steadyErr = Math.abs(steady - target) / target * 100;
+            const band = 0.05 * target;
+            let settleTime = t[n - 1];
+            for (let i = n - 1; i >= 0; i--) {
+                if (Math.abs(y[i] - target) > band) { settleTime = t[i]; break; }
+            }
+            return { overshoot, steadyErr, settleTime };
+        }
+
+        // ================================================================
+        //  6. 更新
+        // ================================================================
+        let chartOpen = null,
+            chartITAE = null;
+
+        function updateAll() {
+            const K = obj.K,
+                T = obj.T;
+            const omega_n = wn;
+
+            document.getElementById('wnDisplay').textContent = omega_n.toFixed(2);
+            document.getElementById('paramWn').textContent = omega_n.toFixed(2);
+
+            const dt = 0.01,
+                tEnd = 12;
+            const t = [];
+            for (let i = 0; i <= tEnd / dt; i++) t.push(i * dt);
+            const target = 1.0;
+
+            // ---- 开环 ----
+            const yOpen = simulateOpen(obj, t);
+            const params = extractParams(yOpen, t);
+
+            document.getElementById('eK').textContent = params.K.toFixed(3);
+            document.getElementById('eT').textContent = params.T.toFixed(3);
+
+            // ---- ITAE ----
+            const itae = calcITAE(params.K, params.T, omega_n);
+
+            document.getElementById('tKpP').textContent = itae.p.Kp.toFixed(3);
+            document.getElementById('tKpPI').textContent = itae.pi.Kp.toFixed(3);
+            document.getElementById('tTiPI').textContent = itae.Ti.toFixed(3);
+            document.getElementById('tKpPID').textContent = itae.pid.Kp.toFixed(3);
+            document.getElementById('tTiPID').textContent = itae.Ti.toFixed(3);
+            document.getElementById('tTdPID').textContent = itae.pid.Kd.toFixed(3);
+
+            // ---- 闭环 ----
+            const yITAE = simulateClosed(itae.pi.Kp, itae.pi.Ki, 0, obj, t);
+
+            // 期望闭环: T_des = wn / (s + wn)
+            const yIdeal = t.map(ti => 1 - Math.exp(-omega_n * ti));
+
+            // ---- 指标 ----
+            const m = calcMetrics(yITAE, t, target);
+            document.getElementById('mOver').textContent = isFinite(m.overshoot) ? m.overshoot.toFixed(1) + '%' : '--';
+            document.getElementById('mSettle').textContent = isFinite(m.settleTime) ? m.settleTime.toFixed(2) + 's' : '--';
+            document.getElementById('mErr').textContent = isFinite(m.steadyErr) ? m.steadyErr.toFixed(2) + '%' : '--';
+            document.getElementById('pidBadge').textContent =
+                `超调: ${isFinite(m.overshoot) ? m.overshoot.toFixed(1) + '%' : '--'}`;
+
+            // ---- 图1：开环 ----
+            if (chartOpen) { chartOpen.destroy(); }
+            chartOpen = new Chart(document.getElementById('chartOpen'), {
+                type: 'line',
+                data: {
+                    labels: t,
+                    datasets: [{
+                        label: '开环响应',
+                        data: yOpen,
+                        borderColor: '#8b5cf6',
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        tension: 0.2,
+                    }, {
+                        label: '稳态 K',
+                        data: t.map(() => params.K),
+                        borderColor: '#e53e3e',
+                        borderWidth: 1.5,
+                        borderDash: [5, 5],
+                        pointRadius: 0,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: {
+                            title: { display: true, text: '时间 (s)', color: '#8b949e', font: { size: 10 } },
+                            grid: { color: 'rgba(48,54,61,0.2)' },
+                            ticks: { color: '#8b949e', maxTicksLimit: 10 }
+                        },
+                        y: {
+                            title: { display: true, text: 'y(t)', color: '#8b949e', font: { size: 10 } },
+                            min: 0,
+                            max: Math.max(params.K * 1.3, 1.5),
+                            grid: { color: 'rgba(48,54,61,0.2)' },
+                            ticks: { color: '#8b949e' }
+                        }
+                    }
+                }
+            });
+
+            // ---- 图2：ITAE 闭环 ----
+            if (chartITAE) { chartITAE.destroy(); }
+            chartITAE = new Chart(document.getElementById('chartITAE'), {
+                type: 'line',
+                data: {
+                    labels: t,
+                    datasets: [{
+                        label: 'ITAE-PI 闭环',
+                        data: yITAE,
+                        borderColor: '#f472b6',
+                        borderWidth: 2.5,
+                        pointRadius: 0,
+                        tension: 0.3,
+                    }, {
+                        label: '期望闭环 T_des',
+                        data: yIdeal,
+                        borderColor: '#fbbf24',
+                        borderWidth: 2,
+                        borderDash: [6, 4],
+                        pointRadius: 0,
+                        tension: 0.3,
+                    }, {
+                        label: '目标值',
+                        data: t.map(() => target),
+                        borderColor: '#e53e3e',
+                        borderWidth: 1.5,
+                        borderDash: [5, 5],
+                        pointRadius: 0,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function(ctx) {
+                                    return ctx.dataset.label + ': ' + ctx.parsed.y.toFixed(3);
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            title: { display: true, text: '时间 (s)', color: '#8b949e', font: { size: 10 } },
+                            grid: { color: 'rgba(48,54,61,0.2)' },
+                            ticks: { color: '#8b949e', maxTicksLimit: 10 }
+                        },
+                        y: {
+                            title: { display: true, text: 'y(t)', color: '#8b949e', font: { size: 10 } },
+                            min: 0,
+                            max: 2.0,
+                            grid: { color: 'rgba(48,54,61,0.2)' },
+                            ticks: { color: '#8b949e' }
+                        }
+                    }
+                }
+            });
+        }
+
+        // ================================================================
+        //  7. 事件
+        // ================================================================
+        function bindSlider(id, valId, key) {
+            const el = document.getElementById(id);
+            const display = document.getElementById(valId);
+            el.addEventListener('input', function() {
+                obj[key] = parseFloat(this.value);
+                display.textContent = obj[key].toFixed(2);
+            });
+        }
+        bindSlider('sliderK', 'valK', 'K');
+        bindSlider('sliderT', 'valT', 'T');
+
+        document.getElementById('sliderWn').addEventListener('input', function() {
+            wn = parseFloat(this.value);
+            document.getElementById('valWn').textContent = wn.toFixed(2);
+            updateAll();
+        });
+
+        document.getElementById('btnUpdate').addEventListener('click', updateAll);
+        document.getElementById('btnReset').addEventListener('click', function() {
+            document.getElementById('sliderK').value = '1.0';
+            document.getElementById('sliderT').value = '1.0';
+            document.getElementById('sliderWn').value = '2.0';
+            obj = { K: 1.0, T: 1.0 };
+            wn = 2.0;
+            document.getElementById('valK').textContent = '1.00';
+            document.getElementById('valT').textContent = '1.00';
+            document.getElementById('valWn').textContent = '2.00';
+            updateAll();
+        });
+
+        // ================================================================
+        //  8. 启动
+        // ================================================================
+        updateAll();
+        console.log('✅ ITAE 最优整定法 已启动');
+        console.log('📌 拖动 ωₙ 调节响应速度');
+    </script>
+
+</body>
+</html>
